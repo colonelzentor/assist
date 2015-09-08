@@ -432,7 +432,9 @@ class Engine(object):
         """
         a, b = self._tfsc_coefficients['afterburner'] if afterburner else self._tfsc_coefficients['normal']
 
-        return (a + b * mach) * sqrt(altitude)
+        theta = self.atmosphere.temperature(altitude=altitude) / self.atmosphere.temperature_sl_rankine
+
+        return (a + b * mach) * sqrt(theta)
 
     def size(self):
         """

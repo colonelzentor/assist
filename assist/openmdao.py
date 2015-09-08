@@ -1,38 +1,6 @@
 from openmdao.main.api import Component
 from openmdao.lib.datatypes.api import Float, Bool, Enum
 
-# Based on http://www.aia-aerospace.org/research_reports/aerospace_statistics/
-#               YEAR  Aircraft            Engine/Eng Parts   Other Parts/Equip
-ESCALATIONS = { 1990: [0.918708240534521, 0.822946175637394, 0.818615751789976],
-                1991: [0.948775055679287, 0.861189801699717, 0.846062052505967],
-                1992: [0.968819599109131, 0.903682719546742, 0.878281622911694],
-                1993: [0.983296213808463, 0.919263456090652, 0.900954653937947],
-                1994: [0.996659242761693, 0.943342776203966, 0.920047732696897],
-                1995: [1.005567928730510, 0.956090651558074, 0.927207637231504],
-                1996: [1.010022271714920, 0.974504249291785, 0.959427207637232],
-                1997: [1.003340757238310, 0.985835694050991, 0.978520286396181],
-                1998: [0.998886414253898, 0.992917847025496, 0.990453460620525],
-                1999: [1, 1, 1],
-                2000: [1.008908685968820, 1.021246458923510, 1.008353221957040],
-                2001: [1.015590200445430, 1.052407932011330, 1.031026252983290],
-                2002: [1.016703786191540, 1.065155807365440, 1.041766109785200],
-                2003: [1.035634743875280, 1.117563739376770, 1.038186157517900],
-                2004: [1.056792873051230, 1.172804532577900, 1.041766109785200],
-                2005: [1.074610244988860, 1.195467422096320, 1.068019093078760],
-                2006: [1.106904231625840, 1.240793201133140, 1.082338902147970],
-                2007: [1.102449888641430, 1.294617563739380, 1.124105011933170],
-                2008: [1.106904231625840, 1.345609065155810, 1.169451073985680],
-                2009: [1.113585746102450, 1.416430594900850, 1.193317422434370],
-                2010: [1.112472160356350, 1.454674220963170, 1.190930787589500],
-                2011: [1.116926503340760, 1.495750708215300, 1.202863961813840],
-                2012: [1.125835189309580, 1.536827195467420, 1.207637231503580],
-                2013: [1.135857461024500, 1.563739376770540, 1.232696897374700],
-                2014: [1.140311804008910, 1.580736543909350, 1.248210023866350]}
-
-FUTURE_ESCALATIONS = dict(aircraft=lambda yr: 0.0169864145 * yr - 32.9627923628,
-                          engines=lambda yr: 0.0386483205 * yr - 76.2369486042,
-                          other=lambda yr: 0.0084778139 * yr - 15.9284409799)
-
 
 class AircraftSizing(Component):
     """
@@ -218,3 +186,33 @@ class AircraftCost(Component):
 
         if self.spares:
             self.cost *= 1.125
+
+
+class AircraftCost(Component):
+    cargo = Bool(False, iotype='in', desc="Is this a cargo aircraft?")
+    spares = Bool(False, iotype='in', desc="Acquire initial spares?")
+    profit = Float(1.2, iotype='in', low=1, high=1.5, desc="Profit/Investment Cost Factor")
+    quantity = Int(100, iotype='in', desc="Lesser of production quantity or number to be produced in 5 years")
+    num_flight_test_aircraft = Int(2, iotype='in', desc="Number of flight test aircraft")
+
+    empty_weight = Float(iotype='in', desc="empty weight", units='lbm')
+    max_velocity = Float(iotype='in', desc="Maximum velocity", units='kts')
+    max_thrust = Float(iotype='in', desc="Engine maximum thrust", units='lbf')
+    max_mach = Float(iotype='in', desc="Engine maximum Mach number")
+    stealth = Float(0.0, iotypes='in', low=0, high=1, desc="Degree of stealth complexity, 0 indicates no low-observable components/materials")
+    materials_complexity = Float(1.0, iotypes='in', low=1, high=2, desc="Materials degree of complexity, aluminum: 1.0, graphite-epoxy: 1.1-1.8, fiberglass: 1.1-1.2, steel: 1.5-2.0, titanium: 1.3-2.0"))
+
+    avionics_weight = Float(iotype='in', desc="Cost of avionics", units='lbm')
+    avionics_complexity = Float(0.25, iotype='in', low=0, high=1, desc="Complexity of the avionics")
+
+    num_engines = Int(iotype='in', desc="Number of engines")
+    turbine_inlet_temp = Float(iotype='in', desc="Turbine inlet temperature", units='degR')
+
+    r_eng = Float(86, iotype='in', desc="Cost per hour of engineering work", units='USD')
+    r_tng = Float(88, iotype='in', desc="Cost per hour of tooling work", units='USD')
+    r_mfg = Float(73, iotype='in', desc="Cost per hour of manufacturing work", units='USD')
+    r_qyc = Float(81, iotype='in', desc="Cost per hour of quality control work", units='USD')
+
+    year = Int(2014, low=1990, iotype='in', desc="Year for cost (original model is in 1999 USD)", units='y')
+
+    acq_cost = Float(iotype='out', desc="Acquisition cost, i.e., total RDT&E plus flyaway cost", units='USD')

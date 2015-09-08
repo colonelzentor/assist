@@ -92,11 +92,12 @@ class Segment(object):
             return self._weight_fraction
         else:
             tsfc = self.aircraft.engine.tsfc(self.mach, self.altitude, self.afterburner)
-            t_to_w = self.aircraft.t_to_w * self.aircraft.thrust_lapse(self.altitude, self.mach)
-            return exp(-tsfc * t_to_w * self.time)
+            t_to_w = self.aircraft.t_to_w * self.aircraft.thrust_lapse(self.altitude, self.mach) / self.prior_weight_fraction
+            return 1 - exp(-tsfc * t_to_w * self.time)
 
     def thrust_to_weight_required(self, aircraft, wing_loading, prior_weight_fraction=1):
         self.aircraft = aircraft
+        self.prior_weight_fraction = prior_weight_fraction
 
         cd_0 = aircraft.cd_0
         k_1 = aircraft.k_1
