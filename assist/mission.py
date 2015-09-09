@@ -36,7 +36,7 @@ class Segment(object):
                              descend=0.98,
                              land=0.99)
 
-    def __init__(self, name, speed, altitude,
+    def __init__(self, name, speed, altitude, payload_released=0,
                  atmosphere=None,
                  *args, **kwargs):
 
@@ -47,6 +47,8 @@ class Segment(object):
             self._weight_fraction = kwargs.pop('weight_fraction', None)
 
         self.altitude = altitude
+
+        self.payload_released = payload_released
 
         self.atmosphere = Atmosphere() if atmosphere is None else atmosphere
 
@@ -96,6 +98,8 @@ class Segment(object):
             return 1 - exp(-tsfc * t_to_w * self.time)
 
     def thrust_to_weight_required(self, aircraft, wing_loading, prior_weight_fraction=1):
+        if self.speed == 0:
+            return [0.0] * len(wing_loading) if hasattr(wing_loading, '__iter__') else 0.0
         self.aircraft = aircraft
         self.prior_weight_fraction = prior_weight_fraction
 

@@ -16,24 +16,19 @@ class Cost(object):
                      profit=[1.0, 2.0, 1.2, 'unitless'],
                      quantity=[1, None, 100, 'unitless'],
                      num_flight_test_aircraft=[1, None, 2, 'n/a'],
-                     empty_weight=[0, None, None, 'lbm'],
-                     max_velocity=[1, None, None, 'kts'],
-                     max_thrust=[1, None, None, 'lbf'],
-                     max_mach=[0.0, None, None, 'unitless'],
                      stealth=[0.0, 1.0, 0.1, 'unitless'],
                      materials_complexity=[1.0, 2.0, 1.0, 'unitless'],
                      avionics_weight=[0.0, None, 0.0, 'unitless'],
                      avionics_complexity=[0.0, 1.0, 0.25, 'unitless']
-                     num_engines=[1, None, 1, 'unitless'],
                      turbine_inlet_temp=[0.0, None, None, 'degR'],
-                     r_eng = [0, None, 86, 
-                     r_tng = 88,
-                     r_mfg = 73,
-                     r_qyc = 81,
-                     year = 2015,)
+                     r_eng=[0, None, 86, 'USD'],
+                     r_tng=[0, None, 88, 'USD'],
+                     r_mfg=[0, None, 73, 'USD'],
+                     r_qyc=[0, None, 81, 'USD'],
+                     year=2015)
 
     # Based on http://www.aia-aerospace.org/research_reports/aerospace_statistics/
-    #                YEAR  Aircraft            Engine/Eng Parts   Other Parts/Equip
+    #                YEAR   Aircraft           Engine/Eng Parts   Other Parts/Equip
     _ESCALATIONS = { 1990: [0.918708240534521, 0.822946175637394, 0.818615751789976],
                      1991: [0.948775055679287, 0.861189801699717, 0.846062052505967],
                      1992: [0.968819599109131, 0.903682719546742, 0.878281622911694],
@@ -64,13 +59,27 @@ class Cost(object):
                                engines=lambda yr: 0.0386483205 * yr - 76.2369486042,
                                other=lambda yr: 0.0084778139 * yr - 15.9284409799)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, aircraft, *args, **kwargs):
+        for k, v in self._DEFAULTS.items():
+            val = kwargs.pop(k, v[2])
+            if hasattr(val, '__iter__'):
+                for item in val:
+                    verify_value(k, item, v[0], v[1], v[3])
+            else:
+                verify_value(k, val, v[0], v[1], v[3])
+            if len(v) > 4:
+                k = v[4]
+            setattr(self, k, val)
+
+    max_thrust=[1, None, None, 'lbf'],
+    max_mach=[0.0, None, None, 'unitless'],
+    num_engines=[1, None, 1, 'unitless'],
 
     # RDT&E + Fly Away cost
     def estimate_acquisition(self):
-        w_e = self.empty_weight
-        v = self.max_velocity
-        q = self.max_quantity
+        w_e = self.aircraft.empty_weight
+        v = self.aircraft.max_velocity
+        q = self.quantity
 
         if self.year in ESCALATION:
             f_mfg = ESCALATION[self.year][0]
@@ -96,7 +105,9 @@ class Cost(object):
         c_d = 66.0 * w_e ** 0.630 * v ** 1.3
         c_f = 1807.1 * w_e ** 0.325 * v ** 0.822 * self.num_flight_test_aircraft ** 1.21
         c_m = 16 * w_e ** 0.921 * v ** 0.621 * q ** 0.799
-        c_eng = 2215 * (0.043 * self.max_thrust + 243.25 * self.max_mach + 0.969 * self.turbine_inlet_temp - 2228)
+        c_eng = 2215 * (0.0430 * self.aircraft.engine.max_thrust + \
+                        243.25 * self.aircraft.engine.max_mach + \
+                        0.9690 * self.aircraft.engine.turbine_inlet_temp - 2228)
 
         c_avionics = self.avionics_weight * (3000 + 3000 * self.avionics_complexity)
 
@@ -107,7 +118,7 @@ class Cost(object):
                                 c_d * f_mfg + \
                                 c_f * f_oth + \
                                 c_m * f_mfg + \
-                                c_eng * self.num_engines * f_eng + \
+                                c_eng * self.aircraft.num_engines * f_eng + \
                                 c_avionics * f_oth
 
         self.acquisition_cost *= self.profit

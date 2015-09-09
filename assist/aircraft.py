@@ -1,7 +1,7 @@
 from __future__ import division, print_function
 from warnings import warn
 
-from numpy import array, pi, exp, sqrt, log, max, argmin, cos, sin
+from numpy import array, pi, exp, sqrt, log, max, argmin, cos, sin, abs
 from scipy.interpolate import interp1d
 
 from util import verify_value
@@ -103,6 +103,13 @@ class Aircraft(object):
         self.landing = self.wing.landing
         self.thrust_lapse = self.engine.thrust_lapse
 
+    @property
+    def payload(self):
+        total = 0
+        for store in self.stores:
+            total += store.weight
+        return total
+
     def __repr__(self):
         return "<Aircraft {} ({}, {})>".format(self.type, str(self.wing), str(self.engine))
 
@@ -190,20 +197,28 @@ class Aircraft(object):
             raise NotImplementedError("Aircraft type '{}' not implemented, " +
                                       "only these have been implemented: {}".format(self.type, coefficients.keys()))
 
+        for segment in segments:
+            pass
+        wf_to_w0 = 1 - segments[-1].prior_weight_fraction * segments[-1].weight_fraction
+
         a, b, c1, c2, c3, c4, c5 = coefficients[self.type]
         k_vs = 1.04 if self.variable_sweep else 1.0
 
         we_to_w0 = (a + b * w_to ** c1 * \
-                            self.wing.ar ** c2 * \
+                            self.wing.aspect_ratio ** c2 * \
                             self.t_to_w ** c3 * \
                             self.w_to_s ** c4 * \
                             self.max_mach ** c5) * k_vs
 
-        self.engine.max_mach = self.max_mach
-        self.engine.max_thrust = self.t_to_w * w_to / self.num_engines
-        self.wing_area = w_to / self.w_to_s
+        w_to_calc = self.payload / (wf_to_w0 - we_to_w0)
 
-        return we_to_w0
+        idx = argmin(abs(w_to_calc - w_to))
+
+        self.w_to = w_to_calc[idx]
+
+        self.engine.max_mach = self.max_mach
+        self.engine.max_thrust = self.t_to_w * self.w_to / self.num_engines
+        self.wing.area = self.w_to / self.w_to_s
 
 
 class Wing(object):
@@ -381,6 +396,7 @@ class Engine(object):
                  k_sfc=1.0,
                  k_w=1.0,
                  k_size=1.0,
+                 turbine_inlet_temp=2000,
                  atmosphere=None, *args, **kwargs):
 
         self.engine_type = engine_type
@@ -389,6 +405,7 @@ class Engine(object):
         self.k_w = k_w
         self.k_size = k_size
         self.atmosphere = Atmosphere() if atmosphere is None else atmosphere
+        self.turbine_inlet_temp = turbine_inlet_temp
 
         if 'bpr' in kwargs:
             self.bpr = kwargs.pop('bpr')
@@ -490,3 +507,12 @@ class Engine(object):
         density_ratio = self.atmosphere.density(altitude) / self.atmosphere.density_sl
 
         return a1 * (a2 + a3 * (sign * mach - a4) ** a5) * density_ratio ** a6
+
+
+class Payload(object):
+    def __init__(self, name=None, weight=0.0, *args, **kwargs):
+        self.name = name
+        self.weight = weight
+
+    def __repr__(self):
+        return "<Payload {} ({} lbm)>".format(self.name, self.weight)
