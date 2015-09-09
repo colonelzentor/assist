@@ -1,8 +1,21 @@
 from __future__ import division
-
 from math import sqrt, exp
-
 from environment import Atmosphere, G_0
+
+
+class Mission(object):
+    """
+    A mission as defined by a list of segments.
+
+    """
+
+    def __init__(self, segments=None, atmosphere=None, *args, **kwargs):
+        self.atmosphere = Atmosphere() if atmosphere is None else atmosphere
+
+        if segments is not None:
+            segments = segments
+        else:
+            raise NotImplementedError("A mission generator has not been implemented yet, must provide list of segments.")
 
 
 class Segment(object):
@@ -28,6 +41,8 @@ class Segment(object):
     :type loiter_time: float
 
     """
+
+    _DEFAULTS=
 
     _WEIGHT_FRACTIONS = dict(warmup=0.99,
                              taxi=0.99,
@@ -56,7 +71,8 @@ class Segment(object):
 
         if speed is not None:
             self.speed = speed * 1.68780986  # kts to ft/s
-            self.mach = self.speed / self.atmosphere.speed_of_sound(self.altitude)
+            self.mach = self.speed / \
+                self.atmosphere.speed_of_sound(self.altitude)
 
         self.n = 1
         if 'turn_rate' in kwargs:
@@ -93,8 +109,11 @@ class Segment(object):
         if self._weight_fraction is not None:
             return self._weight_fraction
         else:
-            tsfc = self.aircraft.engine.tsfc(self.mach, self.altitude, self.afterburner)
-            t_to_w = self.aircraft.t_to_w * self.aircraft.thrust_lapse(self.altitude, self.mach) / self.prior_weight_fraction
+            tsfc = self.aircraft.engine.tsfc(
+                self.mach, self.altitude, self.afterburner)
+            t_to_w = self.aircraft.t_to_w * \
+                self.aircraft.thrust_lapse(
+                    self.altitude, self.mach) / self.prior_weight_fraction
             return 1 - exp(-tsfc * t_to_w * self.time)
 
     def thrust_to_weight_required(self, aircraft, wing_loading, prior_weight_fraction=1):
@@ -107,14 +126,14 @@ class Segment(object):
         k_1 = aircraft.k_1
         k_2 = aircraft.k_2
         # TODO: calculate C_DR as a function of mission segment, i.e., stores
-        cd_r = 0.02 # aircraft.cd_r
+        cd_r = 0.02  # aircraft.cd_r
 
         alpha = aircraft.thrust_lapse(self.altitude, self.mach)
         beta = self.weight_fraction
 
         if 'land' in self.name:
             aircraft.wing.landing
-            #TODO finish landing constraint
+            # TODO finish landing constraint
 
         if 'takeoff' in self.name:
             aircraft.wing.takeoff
