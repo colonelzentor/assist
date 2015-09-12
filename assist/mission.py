@@ -13,7 +13,7 @@ class Mission(object):
         self.atmosphere = Atmosphere() if atmosphere is None else atmosphere
 
         if segments is not None:
-            segments = segments
+            self.segments = segments
         else:
             raise NotImplementedError("A mission generator has not been implemented yet, must provide list of segments.")
 
@@ -42,7 +42,7 @@ class Segment(object):
 
     """
 
-    _DEFAULTS=
+    _DEFAULTS = {}
 
     _WEIGHT_FRACTIONS = dict(warmup=0.99,
                              taxi=0.99,
