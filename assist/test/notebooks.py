@@ -7,9 +7,11 @@ from IPython.nbformat.current import read
 
 
 class Notebooks(TestCase):
-    self.DEVELOPMENT = 'notebooks/development.ipynb'
-    self.TUTORIAL = 'notebooks/tutorial.ipynb'
+    DEVELOPMENT = 'notebooks/development.ipynb'
+    TUTORIAL = 'notebooks/tutorial.ipynb'
+
     def setUp(self):
+        raise Undead
         pass
 
     def tearDown(self):
@@ -19,3 +21,8 @@ class Notebooks(TestCase):
         notebook = read(open(self.NOTEBOOK), 'json')
         r = NotebookRunner(notebook, pylab=True)
         r.run_notebook()
+
+
+if __name__ == '__main__':
+    notebooks_test = Notebooks()
+    notebooks_test.test_development()
