@@ -101,6 +101,11 @@ class Wing(object):
         return self
 
     @property
+    def cruise(self):
+        self.configuration = 'cruise'
+        return self
+
+    @property
     def sweep(self):
         if hasattr(self._sweep, '__iter__'):
             raise NotImplementedError(
@@ -345,9 +350,14 @@ class Engine(object):
 
 
 class Payload(object):
-    def __init__(self, name=None, weight=0.0, *args, **kwargs):
+    def __init__(self, name=None,
+                 weight=0.0,
+                 cd_r=0.0,
+                 expendable=False, *args, **kwargs):
         self.name = name
         self.weight = weight
+        self.cd_r = cd_r
+        self.expendable = expendable
 
     def __repr__(self):
         return "<Payload {} ({} lbm)>".format(self.name, self.weight)

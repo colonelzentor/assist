@@ -1,6 +1,10 @@
 from __future__ import division
-from math import sqrt, exp
+from warnings import warn
+from numpy import sqrt, exp, power, linspace, interp, log, pi
 from environment import Atmosphere, G_0
+
+
+MAX_T_TO_W = 5
 
 
 class Mission(object):
@@ -22,12 +26,12 @@ class Segment(object):
     """
     Aircraft mission
 
-    :param name: the name of the type of segment
+    :param kind: the type of segment, e.g., takeoff, cruise, dash, loiter, land
     :param speed: the speed at which the segment is to be flown (knots)
     :param altitude: the altitude at which the segment will take place (ft)
     :param atmosphere: the atmosphere instance that contains the sea level conditions, if None s provided, a standard one is created
 
-    :type name: str
+    :type kind: str
     :type speed: float
     :type altitude: float
     :type atmosphere: ::class::`Atmosphere`
@@ -42,22 +46,33 @@ class Segment(object):
 
     """
 
-    _DEFAULTS = {}
+    _DEFAULTS = dict(warmup=dict(time=60.0),
+                     takeoff=dict(field_length= 1500,
+                                  mu=0.05,
+                                  time=3,
+                                  obstacle_height=100),
+                     land=dict(field_length=2500,
+                               mu=0.18,
+                               time=3,
+                               obstacle_height=100),
+                     loiter=dict(time=None),
+                    )
 
     _WEIGHT_FRACTIONS = dict(warmup=0.99,
                              taxi=0.99,
                              takeoff=0.98,
                              climb=0.95,
                              descend=0.98,
-                             land=0.99)
+                             land=0.99,
+                            )
 
-    def __init__(self, name, speed, altitude, payload_released=0,
+    def __init__(self, kind, speed, altitude, payload_released=0,
                  atmosphere=None,
-                 *args, **kwargs):
+                 release=None, *args, **kwargs):
 
-        self.name = name
-        if 'weight_fraction' not in kwargs and name in self._WEIGHT_FRACTIONS:
-            self._weight_fraction = self._WEIGHT_FRACTIONS[name]
+        self.kind = kind
+        if 'weight_fraction' not in kwargs and kind in self._WEIGHT_FRACTIONS:
+            self._weight_fraction = self._WEIGHT_FRACTIONS[kind]
         else:
             self._weight_fraction = kwargs.pop('weight_fraction', None)
 
@@ -68,6 +83,8 @@ class Segment(object):
         self.atmosphere = Atmosphere() if atmosphere is None else atmosphere
 
         self.density = self.atmosphere.density(altitude)
+
+        self.release = release
 
         if speed is not None:
             self.speed = speed * 1.68780986  # kts to ft/s
@@ -86,23 +103,20 @@ class Segment(object):
 
         self.climb_rate = kwargs.pop('climb_rate', 0)
         self.acceleration = kwargs.pop('acceleration', 0)
-        self.afterburner = True if 'dash' in self.name else False
 
         self.dynamic_pressure = 0.5 * self.density * self.speed * self.speed
 
-        if 'land' in self.name:
-            self.ldgfl = kwargs.pop('field_length', 2500)
-            self.approach_speed = sqrt(self.ldgfl / 0.3) * 6076.1154856 / 3600
+        for key, defaults in self._DEFAULTS.items():
+            if key in self.kind:
+                for var, default in defaults.items():
+                    setattr(self, var, kwargs.pop(var, default))
 
-        elif 'takeoff' in self.name:
-            self.tofl = kwargs.pop('tofl', 1500)
-            self.obstacle_height = kwargs.pop('obstacle_height', 100)
+        if 'cruise' in self.kind or 'dash' in self.kind:
+            self.range = kwargs.pop('range')
+            self.time = self.range / speed
 
-        elif 'cruise' in self.name or 'dash' in self.name:
-            self.time = kwargs['range'] / speed
-
-        elif 'loiter' in self.name:
-            self.time = kwargs['loiter_time']
+        if len(kwargs) > 0:
+            warn("Unused kwargs: {}".format(kwargs.keys()))
 
     @property
     def weight_fraction(self):
@@ -121,25 +135,77 @@ class Segment(object):
             return [0.0] * len(wing_loading) if hasattr(wing_loading, '__iter__') else 0.0
         self.aircraft = aircraft
         self.prior_weight_fraction = prior_weight_fraction
+        self.afterburner = self.aircraft.engine.afterburner and 'dash' in self.kind
 
         cd_0 = aircraft.cd_0
         k_1 = aircraft.k_1
         k_2 = aircraft.k_2
-        # TODO: calculate C_DR as a function of mission segment, i.e., stores
-        cd_r = 0.02  # aircraft.cd_r
+
+        if self.release is not None:
+            self.aircraft.stores = [store for store in self.aircraft.stores if store not in self.release]
 
         alpha = aircraft.thrust_lapse(self.altitude, self.mach)
-        beta = self.weight_fraction
+        beta = self.prior_weight_fraction
 
-        if 'land' in self.name:
-            aircraft.wing.landing
-            # TODO finish landing constraint
-
-        if 'takeoff' in self.name:
-            aircraft.wing.takeoff
+        t_to_w = None
+        if 'takeoff' in self.kind:
+            aircraft.takeoff
             k_to = aircraft.k_to
-            return (beta * beta / alpha) * k_to * k_to * wing_loading / \
-                   (self.tofl * self.density * G_0 * aircraft.cl_max)
+            cl_max = self.aircraft.cl_max
+            self.aircraft.cl = cl = cl_max / (k_to * k_to)
+            xi = self.aircraft.cd + aircraft.cd_r - self.mu * self.aircraft.cl
+
+            t_to_w = linspace(0.01, MAX_T_TO_W, 200)
+
+            a = k_to * k_to * beta * beta / (self.density * G_0 * cl_max * alpha * t_to_w)
+            a = - (beta / (self.density * G_0 * xi)) * log(1 - xi / ((alpha * t_to_w / beta - self.mu) * cl))
+            b = self.time * k_to * sqrt(2 * beta / (self.density * cl_max))
+            c = self.field_length
+
+            w_to_s = power((-b + sqrt(b * b + 4 * a * c)) / (2 * a), 2)
+
+            self.aircraft._takeoff  = {'w_to_s': w_to_s, 't_to_w': t_to_w, 'a': a, 'b': b, 'c': c}
+
+            return interp(wing_loading, w_to_s, t_to_w)
+
+        if 'land' in self.kind:
+            aircraft.landing
+            k_td = self.aircraft.k_td
+            cl_max = self.aircraft.cl_max
+            self.aircraft.cl = cl = cl_max / (k_td * k_td)
+
+            if aircraft.reverse_thrust:
+                alpha = -alpha
+            else:
+                alpha = 0.0
+
+            # assume drag chute
+            cd_chute = 0.0
+            if self.aircraft.drag_chute is not None:
+                drag_chute_diam = self.aircraft.drag_chute['diameter']
+                drag_chute_cd = self.aircraft.drag_chute['cd']
+                try:
+                    wing_area = self.aircraft.wing.area
+                except AttributeError:
+                    wing_area = 500
+                    warn("Could not get an area for the wing (self.aircraft.wing.area), assuming 500 sqft")
+                cd_chute = drag_chute_cd * 0.25 * drag_chute_diam * drag_chute_diam * pi / wing_area
+
+            xi = self.aircraft.cd + aircraft.cd_r - self.mu * self.aircraft.cl + cd_chute
+
+            t_to_w = linspace(0.01, MAX_T_TO_W, 200)
+
+            a = (beta / (self.density * G_0 * xi)) * log(1 + xi / ((self.mu + (alpha / beta) * t_to_w) * cl))
+            b = self.time * k_td * sqrt(2 * beta / (self.density * cl_max))
+            c = self.field_length
+
+            w_to_s = power((-b + sqrt(b * b + 4 * a * c)) / (2 * a), 2)
+
+            self.aircraft._land = {'w_to_s': w_to_s, 't_to_w': t_to_w, 'a': a, 'b': b, 'c': c}
+
+            return interp(wing_loading, w_to_s, t_to_w)
+
+        cd_r = aircraft.cd_r
 
         aircraft.configuration = None
 

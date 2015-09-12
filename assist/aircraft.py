@@ -26,6 +26,15 @@ class Aircraft(object):
         'jet_transport': 0.35
     }
 
+    # Empty weight coefficients, from Raymer, 1999, pp. 115
+    _W_E_TO_W_TO_COEFFICIENTS = {
+        'jet_trainer': (0.00, 4.28, -0.10, 0.10, 0.20, -0.24, 0.11),
+        'jet_fighter': (-0.02, 2.16, -0.10, 0.20, 0.04, -0.10, 0.08),
+        'mil_cargo': (0.07, 1.71, -0.10, 0.10, 0.06, -0.10, 0.05),
+        'bomber': (0.07, 1.71, -0.10, 0.10, 0.06, -0.10, 0.05),
+        'jet_transport': (0.32, 0.66, -0.13, 0.30, 0.06, -0.05, 0.05)
+    }
+
     _DESIGN_MACH = {
         'jet_trainer': 0.95,
         'jet_fighter': 1.50,
@@ -50,29 +59,33 @@ class Aircraft(object):
         }
     }
 
-    _CONFIGURATIONS = ('takeoff', 'landing')
+    _CONFIGURATIONS = ('takeoff', 'landing', 'cruise')
 
     def __init__(self,
                  aircraft_type='jet_fighter',
-                 configuration=None,
                  wing=None,
                  engine='ATJ',
                  num_engines=1,
                  stores=None,
                  k_aero=0.5,
                  k_2=0.003,
-                 k_to=1.1, *args, **kwargs):
+                 cd_r=None,
+                 k_to=1.1,
+                 reverse_thrust=False,
+                 drag_chute=None,
+                 k_td=1.15, *args, **kwargs):
 
         self.type = aircraft_type
-        self.configuration = configuration
         self.design_mach = self._DESIGN_MACH[aircraft_type]
         self.wing = Wing(k_aero=k_aero,
                          aircraft_type=aircraft_type,
                          design_mach=self.design_mach) if not isinstance(
                              wing, Wing) else wing
+        self.configuration = self.wing.configuration
         self.engine = Engine(engine) if isinstance(
             engine, basestring) else engine
         self.num_engines = num_engines
+        self._cd_r = {'takeoff': 0.02, 'landing': 0.02, 'cruise': 0.0}
 
         # TODO: implement variable sweep analysis
         self.variable_sweep = False
@@ -88,6 +101,13 @@ class Aircraft(object):
 
         self._k_1 = kwargs.pop('k_1', None)
         self.k_2 = k_2
+
+        self.reverse_thrust = reverse_thrust
+
+        self.drag_chute = None
+        if drag_chute is not None:
+            self.drag_chute = dict(diameter=15.0, cd=1.4)
+            self.drag_chute.update(drag_chute)
 
         if self._cd_0 is None and aircraft_type in self._CD_0:
             self._cd_0_min = interp1d(self._CD_0[aircraft_type]['mach'],
@@ -114,10 +134,12 @@ class Aircraft(object):
             self._k_1 = 0.16
 
         self.k_to = k_to
+        self.k_td = k_td
 
         self.cl_max = self.wing.cl_max
         self.takeoff = self.wing.takeoff
         self.landing = self.wing.landing
+        self.cruise = self.wing.cruise
         self.thrust_lapse = self.engine.thrust_lapse
 
     def __repr__(self):
@@ -131,12 +153,12 @@ class Aircraft(object):
             total += store.weight
         return total
 
-    def cd_r(self, stores=None):
-        stores = self.stores[:] if stores is None else stores
-        cd_r = 0
-        for store in stores:
-            # TODO add Store class with functionality to calculate its own drag
-            cd_r += 0.02
+    @property
+    def cd_r(self):
+        cd_r = 0.0
+        if self.configuration in self._cd_r:
+            cd_r += self._cd_r[self.configuration]
+        return cd_r + sum(store.cd_r for store in self.stores)
 
     @property
     def cd_0(self):
@@ -160,6 +182,11 @@ class Aircraft(object):
             max_k_1 = self._k_1_max(self.mach)
             return min_k_1 + (max_k_1 - min_k_1) * (1 - self.k_aero)
 
+    @property
+    def cd(self):
+        cl = getattr(self, 'cl', 0.0)
+        return self.k_1 * cl * cl + self.k_2 * cl + self.cd_0
+
     def synthesize(self, mission, wing_loading=None):
         """
         Identifies a design point for a mission
@@ -181,9 +208,12 @@ class Aircraft(object):
                 prior_weight_fraction=weight_fraction))
             weight_fraction *= segment.weight_fraction
             print("Segment {} has a weight fraction of {}".format(
-                segment.name, segment.weight_fraction))
+                segment.kind, segment.weight_fraction))
 
         self.fuel_fraction = 1 - weight_fraction
+
+        self._synthesis = {'w_to_s': wing_loadings,
+                           't_to_w': thrust_loadings}
 
         self.t_to_w_req = max(array(zip(*thrust_loadings)), 1)
         idx = argmin(self.t_to_w_req)
@@ -202,15 +232,6 @@ class Aircraft(object):
         if hasattr(w_to, '__iter__'):
             w_to = array(range(w_to[0], w_to[1], tol))
 
-        # Empty weight coefficients
-        coefficients = {
-            'jet_trainer': (0.00, 4.28, -0.10, 0.10, 0.20, -0.24, 0.11),
-            'jet_fighter': (-0.02, 2.16, -0.10, 0.20, 0.04, -0.10, 0.08),
-            'mil_cargo': (0.07, 1.71, -0.10, 0.10, 0.06, -0.10, 0.05),
-            'bomber': (0.07, 1.71, -0.10, 0.10, 0.06, -0.10, 0.05),
-            'jet_transport': (0.32, 0.66, -0.13, 0.30, 0.06, -0.05, 0.05)
-        }
-
         if self.type not in coefficients:
             raise NotImplementedError(
                 "Aircraft type '{}' not implemented, " +
@@ -222,7 +243,7 @@ class Aircraft(object):
         wf_to_w0 = 1 - mission.segments[-1].prior_weight_fraction * \
             mission.segments[-1].weight_fraction
 
-        a, b, c1, c2, c3, c4, c5 = coefficients[self.type]
+        a, b, c1, c2, c3, c4, c5 = self._W_E_TO_W_TO_COEFFICIENTS[self.type]
         k_vs = 1.04 if self.variable_sweep else 1.0
 
         we_to_w0 = (a + b * w_to ** c1 * self.wing.aspect_ratio ** c2 *
