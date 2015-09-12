@@ -232,11 +232,11 @@ class Aircraft(object):
         if hasattr(w_to, '__iter__'):
             w_to = array(range(w_to[0], w_to[1], tol))
 
-        if self.type not in coefficients:
+        if self.type not in self._W_E_TO_W_TO_COEFFICIENTS:
             raise NotImplementedError(
                 "Aircraft type '{}' not implemented, " +
                 "only these have been implemented: {}".format(
-                    self.type, coefficients.keys()))
+                    self.type, self._W_E_TO_W_TO_COEFFICIENTS.keys()))
 
         for segment in mission.segments:
             pass
