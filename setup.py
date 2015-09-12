@@ -7,7 +7,7 @@ from setuptools import setup, find_packages
 install_reqs = parse_requirements('requirements.txt', session=PipSession())
 requirements = [str(ir.req) for ir in install_reqs]
 
-setup(name='ASSIST',
+setup(name='assist',
       version='0.0.1',
       description='Aircraft Sizing, Synthesis and Integration Support Tool (ASSIST)',
       long_description=open('README.md').read(),
