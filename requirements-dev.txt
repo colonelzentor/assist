@@ -1,1 +1,2 @@
+ipython[notebook]>=3.0.0
 runipy>=0.1.0
