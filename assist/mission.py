@@ -88,8 +88,7 @@ class Segment(object):
 
         if speed is not None:
             self.speed = speed * 1.68780986  # kts to ft/s
-            self.mach = self.speed / \
-                self.atmosphere.speed_of_sound(self.altitude)
+            self.mach = self.speed / self.atmosphere.speed_of_sound(altitude)
 
         self.n = 1
         if 'turn_rate' in kwargs:
@@ -130,6 +129,11 @@ class Segment(object):
                     self.altitude, self.mach) / self.prior_weight_fraction
             return 1 - exp(-tsfc * t_to_w * self.time)
 
+        self.aircraft.mach = self.mach
+        c1, c2 = self.aircraft.engine._tsfc_coefficients
+        u = (self.aircraft.cd + self.aircraft.cd_r) / self.cl
+        return exp(-(c1 / self.mach + c2) / self.atmosphere.speed_of_sound(altitude) * ())
+
     def thrust_to_weight_required(self, aircraft, wing_loading, prior_weight_fraction=1):
         if self.speed == 0:
             return [0.0] * len(wing_loading) if hasattr(wing_loading, '__iter__') else 0.0
@@ -137,6 +141,7 @@ class Segment(object):
         self.prior_weight_fraction = prior_weight_fraction
         self.afterburner = self.aircraft.engine.afterburner and 'dash' in self.kind
 
+        aircraft.mach = self.mach
         cd_0 = aircraft.cd_0
         k_1 = aircraft.k_1
         k_2 = aircraft.k_2
@@ -147,13 +152,15 @@ class Segment(object):
         alpha = aircraft.thrust_lapse(self.altitude, self.mach)
         beta = self.prior_weight_fraction
 
+        cd_r = aircraft.cd_r
+
         t_to_w = None
         if 'takeoff' in self.kind:
             aircraft.takeoff
             k_to = aircraft.k_to
             cl_max = self.aircraft.cl_max
             self.aircraft.cl = cl = cl_max / (k_to * k_to)
-            xi = self.aircraft.cd + aircraft.cd_r - self.mu * self.aircraft.cl
+            xi = self.aircraft.cd + cd_r - self.mu * self.aircraft.cl
 
             t_to_w = linspace(0.01, MAX_T_TO_W, 200)
 
@@ -191,7 +198,7 @@ class Segment(object):
                     warn("Could not get an area for the wing (self.aircraft.wing.area), assuming 500 sqft")
                 cd_chute = drag_chute_cd * 0.25 * drag_chute_diam * drag_chute_diam * pi / wing_area
 
-            xi = self.aircraft.cd + aircraft.cd_r - self.mu * self.aircraft.cl + cd_chute
+            xi = self.aircraft.cd + cd_r - self.mu * self.aircraft.cl + cd_chute
 
             t_to_w = linspace(0.01, MAX_T_TO_W, 200)
 
@@ -204,8 +211,6 @@ class Segment(object):
             self.aircraft._land = {'w_to_s': w_to_s, 't_to_w': t_to_w, 'a': a, 'b': b, 'c': c}
 
             return interp(wing_loading, w_to_s, t_to_w)
-
-        cd_r = aircraft.cd_r
 
         aircraft.configuration = None
 

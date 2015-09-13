@@ -1,5 +1,5 @@
 from __future__ import division
-from math import sqrt
+from numpy import sqrt, exp
 from util import verify_value
 from environment import Atmosphere
 
@@ -184,13 +184,12 @@ class Wing(object):
 
 class Engine(object):
     _TYPES = dict(ATJ={
-        'name': 'Advanced Turbo-Jet (with afterburner)',
-        'alpha': [1, 1.00, 0.952, 0.30, 0.40, 2.0, 0.7],
-        'tsfc_coefficients':
-        {'normal': [1.1, 0.30],
-         'afterburner': [1.5, 0.23]},
-        'bpr': 0,
-    },
+                      'name': 'Advanced Turbo-Jet (with afterburner)',
+                      'alpha': [1, 1.00, 0.952, 0.30, 0.40, 2.0, 0.7],
+                      'tsfc_coefficients': {'normal': [1.1, 0.30],
+                                            'afterburner': [1.5, 0.23]},
+                      'bpr': 0,
+                  },
                   ATP={
                       'name': 'Advanced Turbo-Prop',
                       'alpha': [1, 0.12, 0.000, 1.00, -0.02, -1.0, 0.5],
@@ -206,9 +205,8 @@ class Engine(object):
                   LBTF={
                       'name': 'Low By-Pass Turbo-Fan (with afterburner)',
                       'alpha': [1, 1.00, 0.940, 0.38, 0.40, 2.0, 0.7],
-                      'tsfc_coefficients':
-                      {'normal': [0.9, 0.30],
-                       'afterburner': [1.6, 0.27]},
+                      'tsfc_coefficients': {'normal': [0.9, 0.30],
+                                            'afterburner': [1.6, 0.27]},
                       'bpr': 1.5,
                   })
 

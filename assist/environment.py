@@ -75,3 +75,12 @@ class Atmosphere(object):
         """
 
         return sqrt(1.4 * 1716.56 * self.temperature(altitude))
+
+    def specific_heat_ratio(self, altitude):
+        temperature = self.temperature(altitude)
+        t = (temperature - 419.67) / 1540
+
+        if t < 0:
+            return 1.40107995826834
+
+        return = 0.131099998803052 * t * t * t - 0.21091027609333 * t * t + 0.00781004072769065 * t + 1.40107995826834

@@ -1,8 +1,8 @@
 from __future__ import division, print_function
 from warnings import warn
 
-from numpy import array, pi, exp, sqrt, log, max, argmin, cos, sin, abs
-from scipy.interpolate import interp1d
+from numpy import (array, pi, exp, sqrt, log, max, argmin, cos, sin, abs,
+                   linspace, meshgrid, interp, unravel_index)
 
 from environment import Atmosphere
 from component import Wing, Engine
@@ -45,17 +45,17 @@ class Aircraft(object):
 
     _CD_0 = {
         'jet_fighter': {
-            'mach': [0.0, 0.8, 0.9, 1.1, 1.2, 2.0],
-            'min': [0.014, 0.014, 0.0160, 0.0260, 0.028, 0.028],
-            'max': [0.018, 0.018, 0.0235, 0.0345, 0.040, 0.038]
+            'mach': [  0.0,   0.8,    0.9,    1.1,   1.2,   2.0],
+            'min':  [0.014, 0.014, 0.0160, 0.0260, 0.028, 0.028],
+            'max':  [0.018, 0.018, 0.0235, 0.0345, 0.040, 0.038]
         }
     }
 
     _K_1 = {
         'jet_fighter': {
-            'mach': [0.0, 0.8, 1.0, 1.2, 2.0],
-            'min': [0.180, 0.180, 0.180, 0.216, 0.360],
-            'max': [0.140, 0.140, 0.170, 0.200, 0.500]
+            'mach': [  0.0,   0.8,   1.0,   1.2,   2.0],
+            'min':  [0.180, 0.180, 0.180, 0.216, 0.360],
+            'max':  [0.140, 0.140, 0.170, 0.200, 0.500]
         }
     }
 
@@ -73,6 +73,7 @@ class Aircraft(object):
                  k_to=1.1,
                  reverse_thrust=False,
                  drag_chute=None,
+                 m_critical=0.9,
                  k_td=1.15, *args, **kwargs):
 
         self.type = aircraft_type
@@ -101,6 +102,7 @@ class Aircraft(object):
 
         self._k_1 = kwargs.pop('k_1', None)
         self.k_2 = k_2
+        self.m_critical = m_critical
 
         self.reverse_thrust = reverse_thrust
 
@@ -110,26 +112,20 @@ class Aircraft(object):
             self.drag_chute.update(drag_chute)
 
         if self._cd_0 is None and aircraft_type in self._CD_0:
-            self._cd_0_min = interp1d(self._CD_0[aircraft_type]['mach'],
-                                      self._CD_0[aircraft_type]['min'],
-                                      bounds_error=False,
-                                      fill_value=0.02)
-            self._cd_0_max = interp1d(self._CD_0[aircraft_type]['mach'],
-                                      self._CD_0[aircraft_type]['max'],
-                                      bounds_error=False,
-                                      fill_value=0.02)
+            cd_0_mach = self._CD_0[aircraft_type]['mach']
+            cd_0_min = self._CD_0[aircraft_type]['min']
+            cd_0_max = self._CD_0[aircraft_type]['max']
+            self._cd_0_min = lambda m: interp(m, cd_0_mach, cd_0_min)
+            self._cd_0_max = lambda m: interp(m, cd_0_mach, cd_0_max)
         else:
             self._cd_0 = 0.02
 
         if self._k_1 is None and aircraft_type in self._K_1:
-            self._k_1_min = interp1d(self._K_1[aircraft_type]['mach'],
-                                     self._K_1[aircraft_type]['min'],
-                                     bounds_error=False,
-                                     fill_value=0.02)
-            self._k_1_max = interp1d(self._K_1[aircraft_type]['mach'],
-                                     self._K_1[aircraft_type]['max'],
-                                     bounds_error=False,
-                                     fill_value=0.02)
+            k_1_mach = self._K_1[aircraft_type]['mach']
+            k_1_min = self._K_1[aircraft_type]['min']
+            k_1_max = self._K_1[aircraft_type]['max']
+            self._k_1_min = lambda m: interp(m, k_1_mach, k_1_min)
+            self._k_1_max = lambda m: interp(m, k_1_mach, k_1_max)
         else:
             self._k_1 = 0.16
 
@@ -167,9 +163,12 @@ class Aircraft(object):
         else:
             if getattr(self, 'mach', None) is None:
                 raise AttributeError("Must set the mach number")
-            min_cd_0 = self._cd_0_min(self.mach)
-            max_cd_0 = self._cd_0_max(self.mach)
-            return min_cd_0 + (max_cd_0 - min_cd_0) * (1 - self.k_aero)
+            return self._cd_0_fxn(self.mach)
+
+    def _cd_0_fxn(self, mach):
+        min_cd_0 = self._cd_0_min(mach)
+        max_cd_0 = self._cd_0_max(mach)
+        return min_cd_0 + (max_cd_0 - min_cd_0) * (1 - self.k_aero)
 
     @property
     def k_1(self):
@@ -178,20 +177,48 @@ class Aircraft(object):
         else:
             if getattr(self, 'mach', None) is None:
                 raise AttributeError("Must set the mach number")
-            min_k_1 = self._k_1_min(self.mach)
-            max_k_1 = self._k_1_max(self.mach)
-            return min_k_1 + (max_k_1 - min_k_1) * (1 - self.k_aero)
+            return self._k_1_fxn(self.mach)
+
+    def _k_1_fxn(self, mach):
+        min_k_1 = self._k_1_min(mach)
+        max_k_1 = self._k_1_max(mach)
+        return min_k_1 + (max_k_1 - min_k_1) * (1 - self.k_aero)
+
+    @property
+    def best_cruise(self):
+        mach = linspace(0, 2.0, 100)
+        altitude = linspace(1000, 70000, 100)
+
+        mv, av = meshgrid(mach, altitude)
+
+        n = len(av[0])
+        a_std = array([[self.engine.atmosphere.speed_of_sound(alt[0])] * n for alt in av])
+
+        # Best Cruise Altitude
+        k_1 = self._k_1_fxn(mv)
+        cd_0 = self._cd_0_fxn(mv)
+        cl = sqrt(cd_0 + self.cd_r / k_1)
+        cd = k_1 * cl * cl + self.k_2 * cl + cd_0
+
+        c1, c2 = self.engine._tfsc_coefficients['normal']
+
+        rf = cl * a_std / ((cd + self.cd_r) * (c1 / mv + c2))
+
+        i_m, i_a = unravel_index(rf.argmax(), rf.shape)
+
+        return mv[i_m, i_a], av[i_m, i_a]
 
     @property
     def cd(self):
         cl = getattr(self, 'cl', 0.0)
         return self.k_1 * cl * cl + self.k_2 * cl + self.cd_0
 
-    def synthesize(self, mission, wing_loading=None):
+    def _synthesize(self, mission, wing_loading=None):
         """
         Identifies a design point for a mission
 
         """
+        self.mission = mission
 
         wing_loadings = array(range(10, 300))
         thrust_loadings = []
@@ -216,12 +243,12 @@ class Aircraft(object):
                            't_to_w': thrust_loadings}
 
         self.t_to_w_req = max(array(zip(*thrust_loadings)), 1)
-        idx = argmin(self.t_to_w_req)
+        idx = self.t_to_w_req.argmin()
 
         self.t_to_w = self.t_to_w_req[idx]
         self.w_to_s = wing_loadings[idx]
 
-    def size(self, mission, w_to=(1000, 60000), tol=10):
+    def _size(self, mission, w_to=(1000, 60000), tol=10):
         """
         Sizes the aircraft for a given mission
 
@@ -252,10 +279,15 @@ class Aircraft(object):
 
         w_to_calc = self.payload / (wf_to_w0 - we_to_w0)
 
-        idx = argmin(abs(w_to_calc - w_to))
+        idx = array(abs(w_to_calc - w_to)).argmin()
 
         self.w_to = w_to_calc[idx]
 
         self.engine.max_mach = self.max_mach
         self.engine.max_thrust = self.t_to_w * self.w_to / self.num_engines
         self.wing.area = self.w_to / self.w_to_s
+
+    def design(self, mission, repetitions=10):
+        for _ in range(repetitions):
+            self._synthesize()
+            self._size()
