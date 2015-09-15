@@ -8,7 +8,7 @@ All methods and data used in this program have been described in the references 
 
 # Installation
 
-pip install git+git://github.com/sanbales/assist.git
+```pip install git+git://github.com/sanbales/assist.git```
 
 # References
 * Mattingly, J. D., Heiser, W. H., and Daley, D. H., "Aircraft Engine Design," AIAA Education Series, AIAA, New York, NY, 1987.
