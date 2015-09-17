@@ -1,5 +1,96 @@
+from assist.environment import Atmosphere
+from assist.aircraft import Aircraft
+from assist.component import Wing, Engine, Payload
+from assist.mission import Mission, Segment
+
 from openmdao.main.api import Component
 from openmdao.lib.datatypes.api import Float, Bool, Enum
+
+
+class Fighter(Component):
+
+    k_aero = Float(0.5, low=0, high=1)
+    taper_ratio = Float(0.2, low=0, high=1)
+    sweep = Float(30, low=0, high=55)
+
+    tofl = Float(1500, low=0, units='ft')
+    airfield_altitude = Float(0, low=0, units='ft')
+
+    cruise_altitude = Float(30000, low=1000, units='ft')
+    cruise_speed = Float(700, low=0, units='knot')
+    cruise_range = Float(150, low=0, units='nmi')
+
+    dash_altitude = Float(30000, low=1000, units='ft')
+    dash_speed = Float(1492, low=0, units='knot')
+    dash_range = Float(100, low=0, units='nmi')
+
+    ldgfl = Float(1500, low=0, units='ft')
+    landing_speed = Float(150, low=0, units='knot')
+
+    def execute(self):
+        wing = Wing(flap_type='single_slot',
+            configuration='landing',
+            slats=True,
+            k_aero=self.k_aero,
+            sweep=self.sweep,
+            flap_span=[0.2, 0.4],
+            taper_ratio=self.taper_ratio)
+
+        self.aircraft = Aircraft(wing=wing,
+                                 stores=[Payload('Crew', weight=200),
+                                         Payload('Cannon', weight=270),
+                                         Payload('Ammunition Feed System', weight=405),
+                                         Payload('Ammunition', weight=550),
+                                         Payload('Casings', weight=198),
+                                         Payload('AMRAAMs', weight=332, quantity=4, cd_r=0.005, expendable=True),
+                                         Payload('AIM-9Xs', weight=188, quantity=2, cd_r=0.002, expendable=True)],
+                                 drag_chute=None)#{'diameter': 15.6, 'cd': 1.4})
+
+        mission = Mission(segments=[Segment('warmup',
+                                            altitude=self.airfield_altitude,
+                                            speed=0,
+                                            time=60),
+                                    Segment('takeoff',
+                                            altitude=self.airfield_altitude,
+                                            speed=150,
+                                            field_length=self.tofl,
+                                            temperature=100),
+                                    Segment('climb',
+                                            altitude=self.airfield_altitude,
+                                            speed=500),
+                                    Segment('cruise',
+                                            altitude=self.cruise_altitude,
+                                            speed=self.cruise_speed,
+                                            range=self.cruise_range,
+                                            release=[()]),
+                                    Segment('descend',
+                                            altitude=self.dash_altitude,
+                                            speed=1000),
+                                    Segment('dash',
+                                            altitude=self.dash_altitude,
+                                            speed=self.dash_speed,
+                                            range=self.dash_range),
+                                    Segment('climb',
+                                            altitude=self.cruise_altitude,
+                                            speed=1000),
+                                    Segment('cruise',
+                                            altitude=self.cruise_altitude,
+                                            speed=1050,
+                                            range=self.cruise_range),
+                                    Segment('descend',
+                                            altitude=self.airfield_altitude,
+                                            speed=1000),
+                                    Segment('land',
+                                            altitude=self.airfield_altitude,
+                                            speed=self.landing_speed,
+                                            field_length=self.ldgfl)])
+
+        self.aircraft._synthesize(mission)
+        self.aircraft._size(mission)
+
+        self.weight = self.aircraft.w_to
+        self.wing_area = self.aircraft.wing.area
+        self.thrust = self.aircraft.engine.max_thrust
 
 
 class AircraftSizing(Component):
