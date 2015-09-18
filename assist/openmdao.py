@@ -1,6 +1,6 @@
 from assist.environment import Atmosphere
 from assist.aircraft import Aircraft
-from assist.components.wing import Wing, Engine, Payload
+from assist.components import Wing, Engine, Payload
 from assist.mission import Mission, Segment
 
 from openmdao.main.api import Component
