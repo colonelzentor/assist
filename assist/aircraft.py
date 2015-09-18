@@ -269,7 +269,9 @@ class Aircraft(object):
                     self.type, self._W_E_TO_W_TO_COEFFICIENTS.keys()))
 
         for segment in mission.segments:
+            # TODO get updated weight fractions and drop payload analysis
             pass
+
         wf_to_w0 = 1 - mission.segments[-1].prior_weight_fraction * \
             mission.segments[-1].weight_fraction
 
