@@ -4,28 +4,32 @@ from assist.components import Wing, Engine, Payload
 from assist.mission import Mission, Segment
 
 from openmdao.main.api import Component
-from openmdao.lib.datatypes.api import Float, Bool, Enum
+from openmdao.lib.datatypes.api import Float
 
 
 class Fighter(Component):
 
-    k_aero = Float(0.5, low=0, high=1)
-    taper_ratio = Float(0.2, low=0, high=1)
-    sweep = Float(30, low=0, high=55)
+    k_aero = Float(0.5, iotype='in', low=0, high=1)
+    taper_ratio = Float(0.2, iotype='in', low=0, high=1)
+    sweep = Float(30, iotype='in', low=0, high=55, units='deg')
 
-    tofl = Float(1500, low=0, units='ft')
-    airfield_altitude = Float(0, low=0, units='ft')
+    tofl = Float(1500, iotype='in', low=0, units='ft')
+    airfield_altitude = Float(0, iotype='in', low=0, units='ft')
 
-    cruise_altitude = Float(30000, low=1000, units='ft')
-    cruise_speed = Float(700, low=0, units='knot')
-    cruise_range = Float(150, low=0, units='nmi')
+    cruise_altitude = Float(30000, iotype='in', low=1000, units='ft')
+    cruise_speed = Float(700, iotype='in', low=0, units='knot')
+    cruise_range = Float(150, iotype='in', low=0, units='nmi')
 
-    dash_altitude = Float(30000, low=1000, units='ft')
-    dash_speed = Float(1492, low=0, units='knot')
-    dash_range = Float(100, low=0, units='nmi')
+    dash_altitude = Float(30000, iotype='in', low=1000, units='ft')
+    dash_speed = Float(1492, iotype='in', low=0, units='knot')
+    dash_range = Float(100, iotype='in', low=0, units='nmi')
 
-    ldgfl = Float(1500, low=0, units='ft')
-    landing_speed = Float(150, low=0, units='knot')
+    ldgfl = Float(1500, iotype='in', low=0, units='ft')
+    landing_speed = Float(150, iotype='in', low=0, units='knot')
+
+    togw = Float(iotype='out', units='lbm')
+    wing_area = Float(iotype='out', units='ft**2')
+    thrust = Float(iotype='out', units='lbf')
 
     def execute(self):
         wing = Wing(flap_type='single_slot',
