@@ -8,7 +8,7 @@ install_reqs = parse_requirements('requirements.txt', session=PipSession())
 requirements = [str(ir.req) for ir in install_reqs]
 
 setup(name='assist',
-      version='0.0.4',
+      version='0.0.5',
       description='An early-stage conceptual design tool for fixed-wing aircraft',
       long_description=open('README.md').read(),
       download_url='https://github.com/sanbales/assist',
