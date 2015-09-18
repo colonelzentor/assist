@@ -1,35 +1,45 @@
+from openmdao.main.api import Component
+from openmdao.lib.datatypes.api import Float
+
 from assist.environment import Atmosphere
 from assist.aircraft import Aircraft
 from assist.components import Wing, Engine, Payload
 from assist.mission import Mission, Segment
-
-from openmdao.main.api import Component
-from openmdao.lib.datatypes.api import Float
+from assist.cost import Cost
 
 
 class Fighter(Component):
 
-    k_aero = Float(0.5, iotype='in', low=0, high=1)
-    taper_ratio = Float(0.2, iotype='in', low=0, high=1)
-    sweep = Float(30, iotype='in', low=0, high=55, units='deg')
+    k_aero = Float(0.5, iotype='in', low=0, high=1, desc="K-Factor for aerodynamic efficiency, higher is better")
+    taper_ratio = Float(0.2, iotype='in', low=0, high=1, desc="The wing tip chord divided by the wing root chord")
+    sweep = Float(30, iotype='in', low=0, high=55, units='deg', desc="Angle between wing's quarter-chord line and a line perpendicular to the free-stream")
 
-    tofl = Float(1500, iotype='in', low=0, units='ft')
-    airfield_altitude = Float(0, iotype='in', low=0, units='ft')
+    tofl = Float(1500, iotype='in', low=0, units='ft', desc="Takeoff Field Length")
+    airfield_altitude = Float(0, iotype='in', low=0, units='ft', desc="Altitude at which the airfield is at")
 
-    cruise_altitude = Float(30000, iotype='in', low=1000, units='ft')
-    cruise_speed = Float(700, iotype='in', low=0, units='knot')
-    cruise_range = Float(150, iotype='in', low=0, units='nmi')
+    cruise_altitude = Float(30000, iotype='in', low=1000, units='ft', desc="Altitude at which the aircraft is will cruise")
+    cruise_speed = Float(700, iotype='in', low=0, units='knot', desc="Speed at which the aircraft will cruise")
+    cruise_range = Float(150, iotype='in', low=0, units='nmi', desc="Distance the aircraft will cover in each cruise segment")
 
-    dash_altitude = Float(30000, iotype='in', low=1000, units='ft')
-    dash_speed = Float(1492, iotype='in', low=0, units='knot')
-    dash_range = Float(100, iotype='in', low=0, units='nmi')
+    dash_altitude = Float(30000, iotype='in', low=1000, units='ft', desc="Altitude at which the aircraft is will perform the dash segment")
+    dash_speed = Float(1492, iotype='in', low=0, units='knot', desc="Speed at which the aircraft will dash")
+    dash_range = Float(100, iotype='in', low=0, units='nmi', desc="Distance the aircraft will cover in each dash segment")
 
-    ldgfl = Float(1500, iotype='in', low=0, units='ft')
-    landing_speed = Float(150, iotype='in', low=0, units='knot')
+    ldgfl = Float(1500, iotype='in', low=0, units='ft', desc="Landing Field Length")
+    landing_speed = Float(150, iotype='in', low=0, units='knot', desc="Speed the aircraft will fly when touching down")
 
-    togw = Float(iotype='out', units='lbm')
-    wing_area = Float(iotype='out', units='ft**2')
-    thrust = Float(iotype='out', units='lbf')
+    togw = Float(iotype='out', units='lbm', desc="Take-off Gross Weight")
+    wing_area = Float(iotype='out', units='ft**2', desc="Wing Area")
+    thrust = Float(iotype='out', units='lbf', desc="Maximum Thrust produced by the engines")
+
+    quantity = Int(iotype='in', low=0, desc="Number of aircraft to manufacture")
+    stealth = Float(iotype='in', low=0, high=1, desc="Degree of stealthiness required")
+    materials_complexity = Float(iotype='in', low=0, high=1, desc="Degree of difficulty with working with selected materials")
+    avionics_weight_fraction = Float(iotype='in', low=0, high=1, desc="Amount of avionics from a nominal amount")
+    avionics_complexity = Float(iotype='in', low=0, high=1, desc="Degree of complexity of the avionics in the aircraft")
+    cost_year = Int(iotype='in', low=1999, desc="Year dollars for which to calculate the cost of the aircraft")
+
+    acq_cost = Float(iotype='out', units='MUSD', desc="Estimated acquisition cost (fly away cost) for the program")
 
     def execute(self):
         wing = Wing(flap_type='single_slot',
@@ -94,7 +104,17 @@ class Fighter(Component):
 
         self.togw = self.aircraft.w_to
         self.wing_area = self.aircraft.wing.area
-        self.thrust = self.aircraft.engine.max_thrust
+        self.thrust = self.aircraft.engine.max_thrust * self.aircraft.num_engines
+
+        cost = Cost(aircraft=aircraft,
+                    stealth=self.stealth,
+                    avionics_complexity=self.avionics_complexity,
+                    materials_complexity=self.materials_complexity,
+                    avionics_weight=self.avionics_weight_fraction,
+                    quantity=self.quantity,
+                    year=self.cost_year)
+
+        self.acq_cost = cost.estimate_acquisition() / 1e6
 
 
 # class AircraftSizing(Component):

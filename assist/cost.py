@@ -19,13 +19,13 @@ class Cost(object):
                      stealth=[0.0, 1.0, 0.1, 'unitless'],
                      materials_complexity=[1.0, 2.0, 1.0, 'unitless'],
                      avionics_weight=[0.0, None, 0.0, 'unitless'],
-                     avionics_complexity=[0.0, 1.0, 0.25, 'unitless']
+                     avionics_complexity=[0.0, 1.0, 0.25, 'unitless'],
                      turbine_inlet_temp=[0.0, None, None, 'degR'],
                      r_eng=[0, None, 86, 'USD'],
                      r_tng=[0, None, 88, 'USD'],
                      r_mfg=[0, None, 73, 'USD'],
                      r_qyc=[0, None, 81, 'USD'],
-                     year=2015)
+                     year=[1990, None, 2015, 'yr'])
 
     # Based on http://www.aia-aerospace.org/research_reports/aerospace_statistics/
     #                YEAR   Aircraft           Engine/Eng Parts   Other Parts/Equip
@@ -60,6 +60,7 @@ class Cost(object):
                                other=lambda yr: 0.0084778139 * yr - 15.9284409799)
 
     def __init__(self, aircraft, *args, **kwargs):
+        self.aircraft = aircraft
         for k, v in self._DEFAULTS.items():
             val = kwargs.pop(k, v[2])
             if hasattr(val, '__iter__'):
@@ -77,18 +78,18 @@ class Cost(object):
 
     # RDT&E + Fly Away cost
     def estimate_acquisition(self):
-        w_e = self.aircraft.empty_weight
-        v = self.aircraft.max_velocity
+        w_e = self.aircraft.w_empty
+        v = self.aircraft.max_speed
         q = self.quantity
 
-        if self.year in ESCALATION:
-            f_mfg = ESCALATION[self.year][0]
-            f_eng = ESCALATION[self.year][1]
-            f_oth = ESCALATION[self.year][2]
+        if self.year in self._ESCALATIONS:
+            f_mfg = self._ESCALATIONS[self.year][0]
+            f_eng = self._ESCALATIONS[self.year][1]
+            f_oth = self._ESCALATIONS[self.year][2]
         else:
-            f_mfg = FUTURE_ESCALATIONS['aircraft'](self.year)
-            f_eng = FUTURE_ESCALATIONS['engine'](self.year)
-            f_oth = FUTURE_ESCALATIONS['other'](self.year)
+            f_mfg = self._FUTURE_ESCALATIONS['aircraft'](self.year)
+            f_eng = self._FUTURE_ESCALATIONS['engines'](self.year)
+            f_oth = self._FUTURE_ESCALATIONS['other'](self.year)
 
         h_mult = self.materials_complexity
         if self.stealth > 0.0:
@@ -109,7 +110,7 @@ class Cost(object):
                         243.25 * self.aircraft.engine.max_mach + \
                         0.9690 * self.aircraft.engine.turbine_inlet_temp - 2228)
 
-        c_avionics = self.avionics_weight * (3000 + 3000 * self.avionics_complexity)
+        c_avionics = self.avionics_weight * 0.15 * w_e * (3000 + 3000 * self.avionics_complexity)
 
         self.acquisition_cost = h_e * self.r_eng * f_mfg + \
                                 h_t * self.r_tng * f_mfg  + \
@@ -125,5 +126,7 @@ class Cost(object):
 
         if self.spares:
             self.acquisition_cost *= 1.125
+
+        self.aircraft.acquisition_cost = self.acquisition_cost
 
         return self.acquisition_cost

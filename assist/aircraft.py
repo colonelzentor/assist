@@ -225,10 +225,13 @@ class Aircraft(object):
         weight_fraction = 1.0
 
         self.max_mach = 0
+        self.max_speed = 0
         for segment in mission.segments:
+            self.mach = segment.mach
             if segment.mach > self.max_mach:
                 self.max_mach = segment.mach
-                self.mach = segment.mach
+            if segment.speed > self.max_speed:
+                self.max_speed = segment.speed
             thrust_loadings.append(segment.thrust_to_weight_required(
                 aircraft=self,
                 wing_loading=wing_loadings,
@@ -282,6 +285,7 @@ class Aircraft(object):
         idx = array(abs(w_to_calc - w_to)).argmin()
 
         self.w_to = w_to_calc[idx]
+        self.w_empty = we_to_w0[idx] * self.w_to
 
         self.engine.max_mach = self.max_mach
         self.engine.max_thrust = self.t_to_w * self.w_to / self.num_engines
