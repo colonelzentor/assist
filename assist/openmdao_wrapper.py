@@ -92,7 +92,7 @@ class Fighter(Component):
         self.aircraft._synthesize(mission)
         self.aircraft._size(mission)
 
-        self.weight = self.aircraft.w_to
+        self.togw = self.aircraft.w_to
         self.wing_area = self.aircraft.wing.area
         self.thrust = self.aircraft.engine.max_thrust
 
