@@ -5,7 +5,7 @@ from numpy import (array, pi, exp, sqrt, log, max, argmin, cos, sin, abs,
                    linspace, meshgrid, interp, unravel_index)
 
 from environment import Atmosphere
-from component import Wing, Engine
+from components import Wing, Engine
 
 
 class Aircraft(object):
