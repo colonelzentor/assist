@@ -126,7 +126,7 @@ class AircraftSizing(Component):
     endurance = Float(desc='Time aircraft can remain aloft', units='hr')
 
     def execute(self):
-        self.fuel_w_frac = 1.05 * (1 - )
+        self.fuel_w_frac = 1.05 * (1 - 0) # TODO: fix this!
         self.w_to = (self.w_payload + self.w_crew) / (1 - self.fuel_w_frac - self.empty_w_frac)
 
         self.ar = self.b * self.b / self.s_ref
