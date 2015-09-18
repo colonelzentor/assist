@@ -1,7 +1,7 @@
 from __future__ import division
 from numpy import sqrt, exp
-from util import verify_value
-from environment import Atmosphere
+from assist.util import verify_value
+from assist.environment import Atmosphere
 
 
 __all__ = ('Wing',)
